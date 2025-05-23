@@ -445,14 +445,21 @@ const MESSAGE_RENDER_EVENTS = [
     event_types.USER_MESSAGE_RENDERED,
 ];
 
+let lastRenderTime = 0;
 export async function init() {
     eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, updateGenerate);
     eventSource.on(event_types.CHAT_CHANGED, handlePreloadWorldInfo);
     eventSource.on(event_types.GENERATION_AFTER_COMMANDS, handleWorldInfoActivation);
     eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, handleWorldInfoActivate);
     eventSource.on(event_types.GENERATION_AFTER_COMMANDS, handleFilterInstall);
-    MESSAGE_RENDER_EVENTS.forEach(e => eventSource.on(e, updateMessageRender));
-}
+    MESSAGE_RENDER_EVENTS.forEach(e => {
+        eventSource.on(e, async (message_id: string, isDryRun?: boolean) => {
+            const now = Date.now();
+            if (now - lastRenderTime < 100) return;  // 100ms 去抖
+            lastRenderTime = now;
+            return updateMessageRender(message_id, isDryRun);
+        });
+    });}
 
 export async function exit() {
     eventSource.removeListener(event_types.CHAT_COMPLETION_SETTINGS_READY, updateGenerate);
@@ -460,5 +467,5 @@ export async function exit() {
     eventSource.removeListener(event_types.GENERATION_AFTER_COMMANDS, handleWorldInfoActivation);
     eventSource.removeListener(event_types.CHAT_COMPLETION_PROMPT_READY, handleWorldInfoActivate);
     eventSource.removeListener(event_types.GENERATION_AFTER_COMMANDS, handleFilterInstall);
-    MESSAGE_RENDER_EVENTS.forEach(e => eventSource.removeListener(e, updateMessageRender));
+    MESSAGE_RENDER_EVENTS.forEach(e => eventSource.removeAllListeners(e));
 }
