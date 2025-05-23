@@ -201,7 +201,12 @@ export async function evalTemplate(content: string, data: Record<string, unknown
             toastr.error(err.message, `EJS Template Error`);
         }
         throw err;
-    }
+    } finally {
+    // 及时清理，防止 data/content 的引用积累
+    EJS_SANDBOX.content = '';
+    EJS_SANDBOX.data = {};
+    EJS_SANDBOX.options = {};
+  }
 
     // await eventSource.emit('prompt_template_evaluation_post', { result, data });
     return result;
