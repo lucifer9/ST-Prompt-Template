@@ -18,6 +18,10 @@ import { injectPrompt, getPromptsInjected } from './inject';
 import { power_user } from '../../../../../power-user.js';
 import { METADATA_KEY } from '../../../../../world-info.js';
 
+import vm from 'vm';
+
+
+
 interface IncluderResult {
     filename: string;
     template: string;
@@ -115,6 +119,20 @@ function escapeEjsInDisabledBlocks(str : string, options : EjsOptions = {}, mark
     );
 }
 
+// 持久化的 sandbox，上面只挂载一次这些对象
+const EJS_SANDBOX: any = {
+  ejs,
+  escaper: escape,
+  includer: include,
+  // 下面 data、content、options 都会被 runInContext 覆盖
+  data: {},
+  content: '',
+  options: {}
+};
+vm.createContext(EJS_SANDBOX);
+// 预编译一次模板引擎的 runner
+const EJS_SCRIPT = new vm.Script(CODE_TEMPLATE);
+
 export async function evalTemplate(content: string, data: Record<string, unknown>,
     opts : EvalTemplateOptions = {}) {
     if (typeof content !== 'string') {
@@ -153,14 +171,20 @@ export async function evalTemplate(content: string, data: Record<string, unknown
     }
     
     try {
-        result = await vm.runInNewContext(CODE_TEMPLATE, {
-            ejs,
-            content,
-            data,
-            escaper: opts.escaper || escape,
-            includer: opts.includer || include,
-            options: opts.options || {},
-        });
+        // result = await vm.runInNewContext(CODE_TEMPLATE, {
+        //     ejs,
+        //     content,
+        //     data,
+        //     escaper: opts.escaper || escape,
+        //     includer: opts.includer || include,
+        //     options: opts.options || {},
+        // });
+        // 复用同一个 sandbox，上面会被覆盖
+        EJS_SANDBOX.content = content;
+        EJS_SANDBOX.data = data;
+        EJS_SANDBOX.options = opts.options || {};
+        // runInContext 会在同一个 context 下执行，节省内存
+        result = await EJS_SCRIPT.runInContext(EJS_SANDBOX, { timeout: 2000 });
     } catch (err) {
         if (opts.logging ?? true) {
             if(settings.debug_enabled) {
